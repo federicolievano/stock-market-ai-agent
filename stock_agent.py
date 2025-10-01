@@ -437,11 +437,37 @@ class StockMarketAgent:
         if any(char in message for char in ['+', '-', '*', '/', '%', '=', 'sqrt', 'sin', 'cos', 'tan', 'log']):
             return 'mathematical_calculation'
         
-        # Stock price queries (very common)
+        # Historical data queries (higher priority)
+        historical_patterns = [
+            r'ayer|yesterday|hace.*día|last.*day',
+            r'última semana|last week|últimos.*días|last.*days',
+            r'histórico|historical|pasado|past',
+            r'cambio|change|variación|variation|trend|tendencia',
+            r'último|last|reciente|recent'
+        ]
+        
+        for pattern in historical_patterns:
+            if re.search(pattern, message_lower):
+                return 'get_historical_data'
+        
+        # Average calculations (higher priority)
+        average_patterns = [
+            r'promedio|average|media|mean',
+            r'última semana|last week|últimos.*días|last.*days',
+            r'calcular.*promedio|calculate.*average',
+            r'precio.*promedio|average.*price'
+        ]
+        
+        for pattern in average_patterns:
+            if re.search(pattern, message_lower):
+                return 'calculate_average_price'
+        
+        # Stock price queries (current price)
         price_patterns = [
-            r'precio|price|cotización|cuesta|cost|valor|value',
-            r'cuánto cuesta|how much|what.*price',
-            r'precio actual|current price'
+            r'precio.*actual|current.*price',
+            r'precio.*ahora|price.*now',
+            r'cuánto.*cuesta|how.*much.*cost',
+            r'precio|price|cotización|quote'
         ]
         
         for pattern in price_patterns:
@@ -454,33 +480,15 @@ class StockMarketAgent:
         
         # Detailed stock information
         info_patterns = [
-            r'información|info|detalles|details|market cap|volumen|volume',
-            r'capitalización|capitalization|52.*week|high|low'
+            r'información.*completa|detailed.*info',
+            r'market.*cap|capitalización',
+            r'volumen|volume|52.*week|high.*low',
+            r'detalles|details|información|info'
         ]
         
         for pattern in info_patterns:
             if re.search(pattern, message_lower):
                 return 'get_stock_info'
-        
-        # Historical data
-        historical_patterns = [
-            r'histórico|historical|ayer|yesterday|cambio|change|trend',
-            r'último|last|semana|week|mes|month|año|year'
-        ]
-        
-        for pattern in historical_patterns:
-            if re.search(pattern, message_lower):
-                return 'get_historical_data'
-        
-        # Average calculations
-        average_patterns = [
-            r'promedio|average|media|mean',
-            r'última semana|last week|últimos días|last days'
-        ]
-        
-        for pattern in average_patterns:
-            if re.search(pattern, message_lower):
-                return 'calculate_average_price'
         
         # Web search
         search_patterns = [
@@ -502,38 +510,98 @@ class StockMarketAgent:
     def _extract_symbol_robust(self, message: str) -> str:
         """Robustly extract stock/crypto symbol from message"""
         message_upper = message.upper()
+        message_lower = message.lower()
         
-        # Common stock symbols mapping
+        # Common stock symbols mapping (expanded)
         stock_mapping = {
             'APPLE': 'AAPL', 'AAPL': 'AAPL',
             'TESLA': 'TSLA', 'TSLA': 'TSLA', 
             'MICROSOFT': 'MSFT', 'MSFT': 'MSFT',
-            'GOOGLE': 'GOOGL', 'GOOGL': 'GOOGL',
+            'GOOGLE': 'GOOGL', 'GOOGL': 'GOOGL', 'ALPHABET': 'GOOGL',
             'AMAZON': 'AMZN', 'AMZN': 'AMZN',
-            'META': 'META', 'FACEBOOK': 'META',
+            'META': 'META', 'FACEBOOK': 'META', 'FB': 'META',
             'NETFLIX': 'NFLX', 'NFLX': 'NFLX',
             'NVIDIA': 'NVDA', 'NVDA': 'NVDA',
-            'BITCOIN': 'BTC', 'BTC': 'BTC',
-            'ETHEREUM': 'ETH', 'ETH': 'ETH'
+            'BITCOIN': 'BTC', 'BTC': 'BTC', 'BITCOIN': 'BTC',
+            'ETHEREUM': 'ETH', 'ETH': 'ETH',
+            'CARDANO': 'ADA', 'ADA': 'ADA',
+            'DOGECOIN': 'DOGE', 'DOGE': 'DOGE',
+            'SOLANA': 'SOL', 'SOL': 'SOL',
+            'POLYGON': 'MATIC', 'MATIC': 'MATIC'
         }
         
-        # Check for direct symbol matches first
+        # Check for direct symbol matches first (case insensitive)
         for key, symbol in stock_mapping.items():
             if key in message_upper:
                 return symbol
+        
+        # Special handling for crypto symbols
+        crypto_keywords = ['bitcoin', 'btc', 'ethereum', 'eth', 'cardano', 'ada', 'dogecoin', 'doge', 'solana', 'sol', 'polygon', 'matic']
+        for crypto in crypto_keywords:
+            if crypto in message_lower:
+                if crypto in ['bitcoin', 'btc']:
+                    return 'BTC'
+                elif crypto in ['ethereum', 'eth']:
+                    return 'ETH'
+                elif crypto in ['cardano', 'ada']:
+                    return 'ADA'
+                elif crypto in ['dogecoin', 'doge']:
+                    return 'DOGE'
+                elif crypto in ['solana', 'sol']:
+                    return 'SOL'
+                elif crypto in ['polygon', 'matic']:
+                    return 'MATIC'
         
         # Look for 3-5 letter uppercase symbols (typical stock symbols)
         symbol_pattern = r'\b[A-Z]{3,5}\b'
         symbols = re.findall(symbol_pattern, message_upper)
         
         # Filter out common words that aren't stock symbols
-        exclude_words = {'THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'HAD', 'HER', 'WAS', 'ONE', 'OUR', 'OUT', 'DAY', 'GET', 'HAS', 'HIM', 'HIS', 'HOW', 'ITS', 'MAY', 'NEW', 'NOW', 'OLD', 'SEE', 'TWO', 'WAY', 'WHO', 'BOY', 'DID', 'MAN', 'MEN', 'PUT', 'SAY', 'SHE', 'TOO', 'USE'}
+        exclude_words = {'THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'HAD', 'HER', 'WAS', 'ONE', 'OUR', 'OUT', 'DAY', 'GET', 'HAS', 'HIM', 'HIS', 'HOW', 'ITS', 'MAY', 'NEW', 'NOW', 'OLD', 'SEE', 'TWO', 'WAY', 'WHO', 'BOY', 'DID', 'MAN', 'MEN', 'PUT', 'SAY', 'SHE', 'TOO', 'USE', 'WAS', 'WERE', 'WHAT', 'WHEN', 'WHERE', 'WHY', 'WITH', 'YESTERDAY', 'WEEK', 'MONTH', 'YEAR', 'PRICE', 'AVERAGE', 'CALCULATE'}
         
         for symbol in symbols:
             if symbol not in exclude_words and len(symbol) >= 3:
                 return symbol
         
         return None
+    
+    def _extract_period(self, message: str) -> str:
+        """Extract time period from message for historical data"""
+        message_lower = message.lower()
+        
+        # Map time expressions to yfinance periods
+        period_mapping = {
+            'ayer': '1d', 'yesterday': '1d', 'hace.*día': '1d', 'last.*day': '1d',
+            'última semana': '1wk', 'last week': '1wk', 'últimos.*días': '5d', 'last.*days': '5d',
+            'último mes': '1mo', 'last month': '1mo', 'últimos.*meses': '3mo', 'last.*months': '3mo',
+            'último año': '1y', 'last year': '1y', 'últimos.*años': '2y', 'last.*years': '2y',
+            'últimos.*años': '5y', 'last.*years': '5y'
+        }
+        
+        for pattern, period in period_mapping.items():
+            if re.search(pattern, message_lower):
+                return period
+        
+        # Default to 1 month if no specific period found
+        return "1mo"
+    
+    def _extract_days(self, message: str) -> int:
+        """Extract number of days from message for average calculation"""
+        message_lower = message.lower()
+        
+        # Map time expressions to number of days
+        days_mapping = {
+            'última semana': 7, 'last week': 7, 'últimos.*días': 7, 'last.*days': 7,
+            'últimos.*días': 5, 'last.*days': 5, 'última semana': 7, 'last week': 7,
+            'último mes': 30, 'last month': 30, 'últimos.*meses': 30, 'last.*months': 30
+        }
+        
+        for pattern, days in days_mapping.items():
+            if re.search(pattern, message_lower):
+                return days
+        
+        # Default to 7 days if no specific period found
+        return 7
     
     def _extract_symbol(self, message: str, tool_type: str) -> str:
         """Extract symbol from message"""
@@ -590,11 +658,15 @@ class StockMarketAgent:
                         print(f"📊 Detected symbol: {symbol}")  # Debug info
                         if symbol:
                             if tool_name == 'get_historical_data':
-                                result = tool_func(symbol, "1mo")
+                                # Determine period based on message content
+                                period = self._extract_period(message)
+                                result = tool_func(symbol, period)
                             else:
-                                result = tool_func(symbol, 7)
+                                # Determine days based on message content
+                                days = self._extract_days(message)
+                                result = tool_func(symbol, days)
                         else:
-                            result = "Por favor especifica el símbolo de la acción (ej: Apple, Tesla, AAPL, TSLA)"
+                            result = "Por favor especifica el símbolo de la acción (ej: Apple, Tesla, Bitcoin, AAPL, TSLA)"
                     
                     elif tool_name == 'web_search':
                         result = tool_func(message)
