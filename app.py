@@ -3,8 +3,17 @@ import os
 from stock_agent import StockMarketAgent
 
 def load_env_file():
-    """Load environment variables from .env file manually"""
+    """Load environment variables from .env file or Streamlit secrets"""
     env_vars = {}
+    
+    # Try to load from Streamlit secrets first (for production)
+    try:
+        if hasattr(st, 'secrets') and st.secrets:
+            env_vars.update(st.secrets)
+    except:
+        pass
+    
+    # Try to load from .env file (for local development)
     try:
         with open('.env', 'r', encoding='utf-8') as f:
             content = f.read()
@@ -16,6 +25,7 @@ def load_env_file():
                     env_vars[key.strip()] = value.strip()
     except FileNotFoundError:
         pass
+    
     return env_vars
 
 # Page configuration

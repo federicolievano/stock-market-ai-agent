@@ -236,8 +236,18 @@ class StockMarketAgent:
             return f"Error fetching price from Alpha Vantage for {symbol}: {str(e)}"
     
     def _load_env_file(self):
-        """Load environment variables from .env file"""
+        """Load environment variables from .env file or Streamlit secrets"""
         env_vars = {}
+        
+        # Try to load from Streamlit secrets first (for production)
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and st.secrets:
+                env_vars.update(st.secrets)
+        except:
+            pass
+        
+        # Try to load from .env file (for local development)
         try:
             with open('.env', 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -249,6 +259,7 @@ class StockMarketAgent:
                         env_vars[key.strip()] = value.strip()
         except FileNotFoundError:
             pass
+        
         return env_vars
     
     def _get_stock_info_alpha_vantage(self, symbol: str) -> str:
